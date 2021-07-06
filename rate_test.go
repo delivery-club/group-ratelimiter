@@ -1,12 +1,13 @@
 package ratelimiter
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"go.uber.org/ratelimit"
+	"github.com/andres-erbsen/clock"
 )
 
 type testCase struct {
@@ -73,8 +74,6 @@ func TestTake(t *testing.T) {
 			testRun(tc)
 		}(tc)
 	}
-
-	wg.Wait()
 }
 
 func testRun(test testCase) {
@@ -87,37 +86,41 @@ func testRun(test testCase) {
 		}
 	)
 
-	rl := NewRateLimiter(limitConf, ratelimit.WithoutSlack)
+	clockMock := clock.NewMock()
+	rl := NewRateLimiterGroup(limitConf, WithoutSlack(), WithClock(clockMock))
+	ctx := context.Background()
 
 	var count int64
 	for i := 0; i < int(test.testCount); i++ {
 		wg.Add(2)
 		go func() {
-			defer wg.Done()
-			rl.Take(firstGroup)
+			wg.Done()
+			rl.Take(ctx, firstGroup)
 			atomic.AddInt64(&count, 1)
 		}()
 
 		go func() {
-			defer wg.Done()
-			rl.Take(secondGroup)
+			wg.Done()
+			rl.Take(ctx, secondGroup)
 		}()
 	}
 
-	wg.Add(2)
-	time.AfterFunc(time.Second, func() {
+	wg.Add(1)
+	clockMock.AfterFunc(1*time.Second, func() {
 		defer wg.Done()
 		if test.groupRate != int(count) {
 			test.tt.Errorf("expected count: %d, actual count: %d", test.groupRate, count)
 		}
 	})
 
-	time.AfterFunc(2*time.Second, func() {
+	wg.Add(1)
+	clockMock.AfterFunc(2*time.Second, func() {
 		defer wg.Done()
-		if test.groupRate*2 != int(count) {
+		if 2*test.groupRate != int(count) {
 			test.tt.Errorf("expected count: %d, actual count: %d", 2*test.groupRate, count)
 		}
 	})
 
+	clockMock.Add(2 * time.Second)
 	wg.Wait()
 }
