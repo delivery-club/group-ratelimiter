@@ -24,7 +24,7 @@ func (c config) MasterRate() int {
 
 func Example() {
 	const firstGroup = "firstGroup"
-	const secondGroup = "second_group"
+	const secondGroup = "secondGroup"
 
 	rl := NewRateLimiterGroup(config{
 		Master: 1000,
@@ -94,7 +94,7 @@ func ExampleWithAnotherTimeWindow() {
 
 	rl := NewRateLimiterGroup(config{
 		Master:    1000,
-		GroupRate: map[string]int{firstGroup: 100}, // 100 per half second, 200 Hz
+		GroupRate: map[string]int{firstGroup: 100}, // 100 per half second or 200rps
 	}, Per(500*time.Millisecond))
 
 	ctx := context.Background()

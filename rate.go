@@ -10,7 +10,7 @@ import (
 
 // Приоритизация групп возможна засчет разницы между их лимитами,
 // чем выше лимит группы, тем выше ее приоритет,
-// тем не менее общее количество запросов будет ограниченна основным лимитом (MasterLimit)
+// тем не менее общее количество запросов будет ограниченно основным лимитом (MasterLimit)
 type GroupLimitConfig interface {
 	MasterRate() int
 	GroupRates() map[string]int
@@ -73,10 +73,12 @@ func Per(per time.Duration) ratelimit.Option {
 	return ratelimit.Per(per)
 }
 
+// WithSlack - allow collect unused requests for future, set how much unused requests can be collected
 func WithSlack(slack int) ratelimit.Option {
 	return ratelimit.WithSlack(slack)
 }
 
+// WithoutSlack - disable slack
 func WithoutSlack() ratelimit.Option {
 	return ratelimit.WithoutSlack
 }

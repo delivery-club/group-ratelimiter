@@ -11,7 +11,7 @@ import (
 )
 
 type testCase struct {
-	groupRate       int
+	firstGroupRate  int
 	secondGroupRate int
 	masterRate      int64
 	testCount       int64
@@ -20,7 +20,7 @@ type testCase struct {
 
 type testConf struct {
 	masterRate      int
-	groupRate       int
+	firstGroupRate  int
 	secondGroupRate int
 }
 
@@ -35,7 +35,7 @@ func (t *testConf) MasterRate() int {
 
 func (t *testConf) GroupRates() map[string]int {
 	return map[string]int{
-		firstGroup:  t.groupRate,
+		firstGroup:  t.firstGroupRate,
 		secondGroup: t.secondGroupRate,
 	}
 }
@@ -43,21 +43,21 @@ func (t *testConf) GroupRates() map[string]int {
 func TestTake(t *testing.T) {
 	tests := []testCase{
 		{
-			groupRate:       5,
+			firstGroupRate:  5,
 			secondGroupRate: 5,
 			masterRate:      100,
 			testCount:       100,
 			tt:              t,
 		},
 		{
-			groupRate:       15,
+			firstGroupRate:  15,
 			secondGroupRate: 5,
 			masterRate:      200,
 			testCount:       100,
 			tt:              t,
 		},
 		{
-			groupRate:       30,
+			firstGroupRate:  30,
 			secondGroupRate: 60,
 			masterRate:      100,
 			testCount:       100,
@@ -81,7 +81,7 @@ func testRun(test testCase) {
 		wg        sync.WaitGroup
 		limitConf = &testConf{
 			masterRate:      int(test.masterRate),
-			groupRate:       test.groupRate,
+			firstGroupRate:  test.firstGroupRate,
 			secondGroupRate: test.secondGroupRate,
 		}
 	)
@@ -108,16 +108,16 @@ func testRun(test testCase) {
 	wg.Add(1)
 	clockMock.AfterFunc(1*time.Second, func() {
 		defer wg.Done()
-		if test.groupRate != int(count) {
-			test.tt.Errorf("expected count: %d, actual count: %d", test.groupRate, count)
+		if test.firstGroupRate != int(count) {
+			test.tt.Errorf("expected count: %d, actual count: %d", test.firstGroupRate, count)
 		}
 	})
 
 	wg.Add(1)
 	clockMock.AfterFunc(2*time.Second, func() {
 		defer wg.Done()
-		if 2*test.groupRate != int(count) {
-			test.tt.Errorf("expected count: %d, actual count: %d", 2*test.groupRate, count)
+		if 2*test.firstGroupRate != int(count) {
+			test.tt.Errorf("expected count: %d, actual count: %d", 2*test.firstGroupRate, count)
 		}
 	})
 
