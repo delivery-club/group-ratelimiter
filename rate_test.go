@@ -8,20 +8,19 @@ import (
 	"time"
 
 	"github.com/andres-erbsen/clock"
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/ratelimit"
 )
 
 type testCase struct {
-	groupRate       int
+	firstGroupRate  int
 	secondGroupRate int
-	masterRate      int64
-	testCount       int64
-	tt              *testing.T
-}
-
-type testConf struct {
 	masterRate      int
-	groupRate       int
-	secondGroupRate int
+	tt              *testing.T
+	wg              *sync.WaitGroup
+	clock           *clock.Mock
+	count           int32
+	name            string
 }
 
 const (
@@ -29,98 +28,84 @@ const (
 	secondGroup = "second_group"
 )
 
-func (t *testConf) MasterRate() int {
-	return t.masterRate
+func TestCase1(t *testing.T) {
+	RunTestCase(testCase{
+		firstGroupRate:  20,
+		secondGroupRate: 60,
+		masterRate:      100,
+		tt:              t,
+		name:            "case_1",
+	}, t)
 }
 
-func (t *testConf) GroupRates() map[string]int {
-	return map[string]int{
-		firstGroup:  t.groupRate,
-		secondGroup: t.secondGroupRate,
-	}
+func TestCase2(t *testing.T) {
+	RunTestCase(testCase{
+		firstGroupRate:  60,
+		secondGroupRate: 20,
+		masterRate:      100,
+		tt:              t,
+		name:            "case_2",
+	}, t)
 }
 
-func TestTake(t *testing.T) {
-	tests := []testCase{
-		{
-			groupRate:       5,
-			secondGroupRate: 5,
-			masterRate:      100,
-			testCount:       100,
-			tt:              t,
-		},
-		{
-			groupRate:       15,
-			secondGroupRate: 5,
-			masterRate:      200,
-			testCount:       100,
-			tt:              t,
-		},
-		{
-			groupRate:       30,
-			secondGroupRate: 60,
-			masterRate:      100,
-			testCount:       100,
-			tt:              t,
-		},
-	}
+func RunTestCase(tc testCase, t *testing.T) {
+	t.Run(tc.name, func(t *testing.T) {
+		tc.clock = clock.NewMock()
+		tc.wg = &sync.WaitGroup{}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		defer tc.wg.Wait()
+
+		tc.testRun(ctx)
+
+		tc.clock.Add(3 * time.Second)
+	})
+}
+
+func (t *testCase) testRun(ctx context.Context) {
+	opts := []ratelimit.Option{WithoutSlack(), WithClock(t.clock)}
+
+	rl := New(t.masterRate, opts...).
+		AddGroup(firstGroup, t.firstGroupRate, opts...).
+		AddGroup(secondGroup, t.secondGroupRate, opts...)
 
 	var wg sync.WaitGroup
-	for _, tc := range tests {
-		wg.Add(1)
+	wg.Add(2)
+	go func() {
+		wg.Done()
+		for {
+			rl.Take(ctx, firstGroup)
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			atomic.AddInt32(&t.count, 1)
+		}
+	}()
+	go func() {
+		wg.Done()
+		for {
+			rl.Take(ctx, secondGroup)
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+		}
+	}()
+	wg.Wait()
 
-		go func(tc testCase) {
-			defer wg.Done()
-			testRun(tc)
-		}(tc)
-	}
+	t.after(1*time.Second, 1*t.firstGroupRate)
+	t.after(2*time.Second, 2*t.firstGroupRate)
+	t.after(3*time.Second, 3*t.firstGroupRate)
 }
 
-func testRun(test testCase) {
-	var (
-		wg        sync.WaitGroup
-		limitConf = &testConf{
-			masterRate:      int(test.masterRate),
-			groupRate:       test.groupRate,
-			secondGroupRate: test.secondGroupRate,
-		}
-	)
-
-	clockMock := clock.NewMock()
-	rl := NewRateLimiterGroup(limitConf, WithoutSlack(), WithClock(clockMock))
-	ctx := context.Background()
-
-	var count int64
-	for i := 0; i < int(test.testCount); i++ {
-		wg.Add(2)
-		go func() {
-			wg.Done()
-			rl.Take(ctx, firstGroup)
-			atomic.AddInt64(&count, 1)
-		}()
-
-		go func() {
-			wg.Done()
-			rl.Take(ctx, secondGroup)
-		}()
-	}
-
-	wg.Add(1)
-	clockMock.AfterFunc(1*time.Second, func() {
-		defer wg.Done()
-		if test.groupRate != int(count) {
-			test.tt.Errorf("expected count: %d, actual count: %d", test.groupRate, count)
-		}
+func (t *testCase) after(d time.Duration, count int) {
+	t.wg.Add(1)
+	t.clock.AfterFunc(d, func() {
+		assert.Equal(t.tt, count, int(t.count), "test: %s, expected count: %d, actual count: %d", t.name, count, int(t.count))
+		t.wg.Done()
 	})
-
-	wg.Add(1)
-	clockMock.AfterFunc(2*time.Second, func() {
-		defer wg.Done()
-		if 2*test.groupRate != int(count) {
-			test.tt.Errorf("expected count: %d, actual count: %d", 2*test.groupRate, count)
-		}
-	})
-
-	clockMock.Add(2 * time.Second)
-	wg.Wait()
 }
