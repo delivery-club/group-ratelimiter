@@ -9,30 +9,13 @@ import (
 	"github.com/andres-erbsen/clock"
 )
 
-type config struct {
-	Master    int
-	GroupRate map[string]int
-}
-
-func (c config) GroupRates() map[string]int {
-	return c.GroupRate
-}
-
-func (c config) MasterRate() int {
-	return c.Master
-}
-
 func Example() {
 	const firstGroup = "firstGroup"
 	const secondGroup = "secondGroup"
 
-	rl := NewRateLimiterGroup(config{
-		Master: 1000,
-		GroupRate: map[string]int{
-			firstGroup:  100,
-			secondGroup: 200,
-		},
-	}, WithoutSlack())
+	rl := New(1000, WithoutSlack()).
+		AddGroup(firstGroup, 100, WithoutSlack()).
+		AddGroup(secondGroup, 200, WithoutSlack())
 
 	ch1 := make(chan string, 10)
 	ch2 := make(chan string, 10)
@@ -89,13 +72,12 @@ func Example() {
 }
 
 //nolint:govet
+//goland:noinspection GoTestName
 func ExampleWithAnotherTimeWindow() {
 	const firstGroup = "firstGroup"
 
-	rl := NewRateLimiterGroup(config{
-		Master:    1000,
-		GroupRate: map[string]int{firstGroup: 100}, // 100 per half second or 200rps
-	}, Per(500*time.Millisecond))
+	rl := New(1000, Per(500*time.Millisecond)).
+		AddGroup(firstGroup, 100, Per(500*time.Millisecond)) // 100 per half second or 200rps
 
 	ctx := context.Background()
 	prev := time.Now()
@@ -121,23 +103,24 @@ func ExampleWithAnotherTimeWindow() {
 
 type clockDecorator struct {
 	clock.Clock
+	value string
 }
 
 func (c clockDecorator) Sleep(t time.Duration) {
-	fmt.Println("decorated sleep")
+	fmt.Println("decorated sleep", c.value)
 	time.Sleep(t)
 }
 
 //nolint:govet
+//goland:noinspection GoTestName
 func ExampleWithClockDecorator() {
 	const firstGroup = "firstGroup"
 
-	cl := clockDecorator{clock.New()}
+	cl := clockDecorator{Clock: clock.New(), value: "master"}
+	cl2 := clockDecorator{Clock: clock.New(), value: "group"}
 
-	rl := NewRateLimiterGroup(config{
-		Master:    1000,
-		GroupRate: map[string]int{firstGroup: 100},
-	}, WithClock(cl))
+	rl := New(1000, WithClock(cl)).
+		AddGroup(firstGroup, 100, WithClock(cl2))
 
 	ctx := context.Background()
 	for i := 0; i < 2; i++ {
@@ -145,8 +128,8 @@ func ExampleWithClockDecorator() {
 	}
 
 	// Output:
-	// decorated sleep
-	// decorated sleep
-	// decorated sleep
-	// decorated sleep
+	// decorated sleep master
+	// decorated sleep group
+	// decorated sleep master
+	// decorated sleep group
 }

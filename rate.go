@@ -11,13 +11,9 @@ import (
 // Приоритизация групп возможна засчет разницы между их лимитами,
 // чем выше лимит группы, тем выше ее приоритет,
 // тем не менее общее количество запросов будет ограниченно основным лимитом (MasterLimit)
-type GroupLimitConfig interface {
-	MasterRate() int
-	GroupRates() map[string]int
-}
-
 type GroupLimiter interface {
 	Take(context context.Context, groupName string) time.Time
+	AddGroup(groupName string, rate int, opts ...ratelimit.Option) GroupLimiter
 }
 
 // groupLimiter описание условий:
@@ -30,13 +26,13 @@ type groupLimiter struct {
 	groupLimiters map[string]ratelimit.Limiter
 }
 
-func (rl groupLimiter) Take(ctx context.Context, group string) time.Time {
-	if gl, ok := rl.groupLimiters[group]; ok {
+func (gr *groupLimiter) Take(ctx context.Context, group string) time.Time {
+	if gl, ok := gr.groupLimiters[group]; ok {
 		select {
 		case <-ctx.Done():
 			return time.Now()
 		default:
-			rl.masterLimit.Take()
+			gr.masterLimit.Take()
 		}
 
 		select {
@@ -50,17 +46,15 @@ func (rl groupLimiter) Take(ctx context.Context, group string) time.Time {
 	return time.Now()
 }
 
-func NewRateLimiterGroup(config GroupLimitConfig, opts ...ratelimit.Option) GroupLimiter {
-	var gl = groupLimiter{
-		masterLimit:   ratelimit.New(config.MasterRate(), opts...),
-		groupLimiters: make(map[string]ratelimit.Limiter, len(config.GroupRates())),
-	}
+func New(rate int, opts ...ratelimit.Option) GroupLimiter {
+	return &groupLimiter{masterLimit: ratelimit.New(rate, opts...), groupLimiters: make(map[string]ratelimit.Limiter, 2)}
+}
 
-	for group, rate := range config.GroupRates() {
-		gl.groupLimiters[group] = ratelimit.New(rate, opts...)
-	}
+// AddGroup - add group to groupLimiter, method is not safe for concurrent use by multiple goroutines
+func (gr *groupLimiter) AddGroup(groupName string, rate int, opts ...ratelimit.Option) GroupLimiter {
+	gr.groupLimiters[groupName] = ratelimit.New(rate, opts...)
 
-	return gl
+	return gr
 }
 
 // WithClock - allow set custom clock objects
