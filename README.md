@@ -9,34 +9,15 @@ import (
 	"fmt"
 	"sync"
 	"time"
-
-	"go.uber.org/ratelimit"
 )
-
-type config struct {
-	Master    int
-	GroupRate map[string]int
-}
-
-func (c config) GroupRates() map[string]int {
-	return c.GroupRate
-}
-
-func (c config) MasterRate() int {
-	return c.Master
-}
 
 func main() {
 	const firstGroup = "firstGroup"
 	const secondGroup = "secondGroup"
 
-	rl := NewRateLimiterGroup(config{
-		Master: 1000, // global limit 1000 rps
-		GroupRate: map[string]int{
-			firstGroup:  100, // limit of the first group 100 rps
-			secondGroup: 200, // limit of the second group 200 rps
-		},
-	})
+	rl := New(1000). // global limit 1000 rps
+	    AddGroup(firstGroup, 100). // limit of the first group 100 rps
+	    AddGroup(secondGroup, 200) // limit of the second group 200 rps
 
 	ch1 := make(chan string, 10)
 	ch2 := make(chan string, 10)
