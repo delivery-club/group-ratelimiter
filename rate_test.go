@@ -59,7 +59,7 @@ func TestTake(t *testing.T) {
 }
 
 func testRun(testNum int, test testCase) {
-	clockMock := clock.NewMock()
+	clockMock := clock.New()
 	opts := []ratelimit.Option{WithoutSlack(), WithClock(clockMock)}
 
 	rl := New(test.masterRate, opts...).
@@ -71,19 +71,14 @@ func testRun(testNum int, test testCase) {
 		count int64
 	)
 	ctx, cancel := context.WithCancel(context.Background())
-	defer wg.Wait()
 	defer cancel()
+	defer wg.Wait()
 
 	wg.Add(2)
 	go func() {
 		wg.Done()
 		for {
 			rl.Take(ctx, firstGroup)
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
 			atomic.AddInt64(&count, 1)
 		}
 	}()
@@ -91,24 +86,17 @@ func testRun(testNum int, test testCase) {
 		wg.Done()
 		for {
 			rl.Take(ctx, secondGroup)
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
 		}
 	}()
 	wg.Wait()
 
 	wg.Add(2)
 	clockMock.AfterFunc(1*time.Second, func() {
-		wg.Done()
 		assert.Equal(test.tt, test.firstGroupRate, int(count), "testNum: %d, expected count: %d, actual count: %d", testNum, test.firstGroupRate, count)
+		wg.Done()
 	})
 	clockMock.AfterFunc(2*time.Second, func() {
-		wg.Done()
 		assert.Equal(test.tt, 2*test.firstGroupRate, int(count), "testNum: %d, expected count: %d, actual count: %d", testNum, 2*test.firstGroupRate, count)
+		wg.Done()
 	})
-
-	clockMock.Add(2 * time.Second)
 }
