@@ -31,8 +31,8 @@ func (gr *groupLimiter) Take(ctx context.Context, group string) time.Time {
 	case <-ctx.Done():
 		return time.Now()
 	default:
-		gr.masterLimit.Take()
 	}
+	t := gr.masterLimit.Take()
 
 	if gl, ok := gr.groupLimiters[group]; ok {
 		select {
@@ -43,7 +43,7 @@ func (gr *groupLimiter) Take(ctx context.Context, group string) time.Time {
 		}
 	}
 
-	return time.Now()
+	return t
 }
 
 func New(rate int, opts ...ratelimit.Option) GroupLimiter {
