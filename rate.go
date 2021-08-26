@@ -27,14 +27,14 @@ type groupLimiter struct {
 }
 
 func (gr *groupLimiter) Take(ctx context.Context, group string) time.Time {
-	if gl, ok := gr.groupLimiters[group]; ok {
-		select {
-		case <-ctx.Done():
-			return time.Now()
-		default:
-			gr.masterLimit.Take()
-		}
+	select {
+	case <-ctx.Done():
+		return time.Now()
+	default:
+		gr.masterLimit.Take()
+	}
 
+	if gl, ok := gr.groupLimiters[group]; ok {
 		select {
 		case <-ctx.Done():
 			return time.Now()
