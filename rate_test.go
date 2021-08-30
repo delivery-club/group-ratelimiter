@@ -48,16 +48,6 @@ func TestCase2(t *testing.T) {
 	}, t)
 }
 
-func TestCase3(t *testing.T) {
-	RunTestCase(testCase{
-		firstGroupRate:  20,
-		secondGroupRate: 20,
-		masterRate:      100,
-		tt:              t,
-		name:            "case_3",
-	}, t)
-}
-
 func RunTestCase(tc testCase, t *testing.T) {
 	t.Run(tc.name, func(t *testing.T) {
 		tc.clock = clock.NewMock()
