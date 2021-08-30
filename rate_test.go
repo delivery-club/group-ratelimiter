@@ -17,6 +17,10 @@ type testCase struct {
 	secondGroupRate int
 	masterRate      int
 	tt              *testing.T
+	wg              *sync.WaitGroup
+	clock           *clock.Mock
+	count           int32
+	name            string
 }
 
 const (
@@ -24,47 +28,59 @@ const (
 	secondGroup = "second_group"
 )
 
-func TestTake(t *testing.T) {
-	tests := []testCase{
-		//{
-		//	firstGroupRate:  5,
-		//	secondGroupRate: 5,
-		//	masterRate:      100,
-		//	tt:              t,
-		//},
-		//{
-		//	firstGroupRate:  15,
-		//	secondGroupRate: 5,
-		//	masterRate:      200,
-		//	tt:              t,
-		//},
-		{
-			firstGroupRate:  30,
-			secondGroupRate: 60,
-			masterRate:      100,
-			tt:              t,
-		},
-	}
-
-	for testNum, tc := range tests {
-		testRun(testNum, tc)
-	}
+func TestCase1(t *testing.T) {
+	RunTestCase(testCase{
+		firstGroupRate:  20,
+		secondGroupRate: 60,
+		masterRate:      100,
+		tt:              t,
+		name:            "case_1",
+	}, t)
 }
 
-func testRun(testNum int, test testCase) {
-	clockMock := clock.NewMock()
-	opts := []ratelimit.Option{WithoutSlack(), WithClock(clockMock)}
+func TestCase2(t *testing.T) {
+	RunTestCase(testCase{
+		firstGroupRate:  60,
+		secondGroupRate: 20,
+		masterRate:      100,
+		tt:              t,
+		name:            "case_2",
+	}, t)
+}
 
-	rl := New(test.masterRate, opts...).
-		AddGroup(firstGroup, test.firstGroupRate, opts...).
-		AddGroup(secondGroup, test.secondGroupRate, opts...)
+func TestCase3(t *testing.T) {
+	RunTestCase(testCase{
+		firstGroupRate:  20,
+		secondGroupRate: 20,
+		masterRate:      100,
+		tt:              t,
+		name:            "case_3",
+	}, t)
+}
 
-	var (
-		wg    sync.WaitGroup
-		count int64
-	)
-	ctx, cancel := context.WithCancel(context.Background())
+func RunTestCase(tc testCase, t *testing.T) {
+	t.Run(tc.name, func(t *testing.T) {
+		tc.clock = clock.NewMock()
+		tc.wg = &sync.WaitGroup{}
 
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		defer tc.wg.Wait()
+
+		tc.testRun(ctx)
+
+		tc.clock.Add(3 * time.Second)
+	})
+}
+
+func (t *testCase) testRun(ctx context.Context) {
+	opts := []ratelimit.Option{WithoutSlack(), WithClock(t.clock)}
+
+	rl := New(t.masterRate, opts...).
+		AddGroup(firstGroup, t.firstGroupRate, opts...).
+		AddGroup(secondGroup, t.secondGroupRate, opts...)
+
+	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
 		wg.Done()
@@ -75,7 +91,7 @@ func testRun(testNum int, test testCase) {
 				return
 			default:
 			}
-			atomic.AddInt64(&count, 1)
+			atomic.AddInt32(&t.count, 1)
 		}
 	}()
 	go func() {
@@ -91,17 +107,15 @@ func testRun(testNum int, test testCase) {
 	}()
 	wg.Wait()
 
-	wg.Add(2)
-	clockMock.AfterFunc(1*time.Second, func() {
-		assert.Equal(test.tt, test.firstGroupRate, int(count), "testNum: %d, expected count: %d, actual count: %d", testNum, test.firstGroupRate, count)
-		wg.Done()
-	})
-	clockMock.AfterFunc(2*time.Second, func() {
-		cancel()
-		assert.Equal(test.tt, 2*test.firstGroupRate, int(count), "testNum: %d, expected count: %d, actual count: %d", testNum, 2*test.firstGroupRate, count)
-		wg.Done()
-	})
+	t.after(1*time.Second, 1*t.firstGroupRate)
+	t.after(2*time.Second, 2*t.firstGroupRate)
+	t.after(3*time.Second, 3*t.firstGroupRate)
+}
 
-	clockMock.Add(2 * time.Second)
-	wg.Wait()
+func (t *testCase) after(d time.Duration, count int) {
+	t.wg.Add(1)
+	t.clock.AfterFunc(d, func() {
+		assert.Equal(t.tt, count, int(t.count), "test: %s, expected count: %d, actual count: %d", t.name, count, int(t.count))
+		t.wg.Done()
+	})
 }
