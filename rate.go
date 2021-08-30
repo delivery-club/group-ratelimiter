@@ -37,10 +37,11 @@ func (gr *groupLimiter) Take(ctx context.Context, group string) time.Time {
 	if gl, ok := gr.groupLimiters[group]; ok {
 		select {
 		case <-ctx.Done():
-			return time.Now()
+			return t
 		default:
-			return gl.Take()
 		}
+
+		return gl.Take()
 	}
 
 	return t
