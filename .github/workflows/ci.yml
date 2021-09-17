@@ -13,6 +13,6 @@ jobs:
         with:
           go-version: '1.14'
       - name: Run coverage
-        run: go test -cover -count=1 -short
+        run: go test -cover -coverprofile=coverage.txt -count=1 -short
       - name: Upload coverage to Codecov
         run: bash <(curl -s https://codecov.io/bash)

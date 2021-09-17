@@ -1,5 +1,7 @@
 # Group Ratelimiter
 
+[![codecov](https://codecov.io/gh/delivery-club/group-ratelimiter/branch/master/graph/badge.svg)](https://codecov.io/gh/delivery-club/group-ratelimiter)
+
 Данный пакет предназначен для ограничения доступа к ресурсу между несколькими группами потребителей.
 
 Под собой библиотека использует https://github.com/uber-go/ratelimit
