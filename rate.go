@@ -11,6 +11,8 @@ import (
 // Приоритизация групп возможна засчет разницы между их лимитами,
 // чем выше лимит группы, тем выше ее приоритет,
 // тем не менее общее количество запросов будет ограниченно основным лимитом (MasterLimit)
+
+// GroupLimiter - limit access to resource across groups
 type GroupLimiter interface {
 	Take(context context.Context, groupName string) time.Time
 	AddGroup(groupName string, rate int, opts ...ratelimit.Option) GroupLimiter
@@ -48,7 +50,7 @@ func (gr *groupLimiter) Take(ctx context.Context, group string) time.Time {
 }
 
 func New(rate int, opts ...ratelimit.Option) GroupLimiter {
-	return &groupLimiter{masterLimit: ratelimit.New(rate, opts...), groupLimiters: make(map[string]ratelimit.Limiter, 2)}
+	return &groupLimiter{masterLimit: ratelimit.New(rate, opts...), groupLimiters: make(map[string]ratelimit.Limiter, 1)}
 }
 
 // AddGroup - add group to groupLimiter, method is not safe for concurrent use by multiple goroutines

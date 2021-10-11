@@ -109,3 +109,55 @@ func (t *testCase) after(d time.Duration, count int) {
 		t.wg.Done()
 	})
 }
+
+func TestContext(t *testing.T) {
+	t.Run("context_cancel_before_take", func(t *testing.T) {
+		rl := New(1000, WithSlack(0)).
+			AddGroup(firstGroup, 1, Per(time.Hour))
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		now := time.Now()
+		for i := 0; i < 10; i++ {
+			if d := rl.Take(ctx, firstGroup).Sub(now); d.Nanoseconds() > time.Microsecond.Nanoseconds() {
+				t.Fatalf("not equal duration='%s'", d.String())
+			}
+			now = time.Now()
+		}
+
+		//take undefined group
+		_ = rl.Take(context.Background(), secondGroup)
+	})
+
+	t.Run("context_cancel_on_group", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cl := clockMock{counter: ptfOfInt(0), Clock: clock.New(), cancelFunc: cancel}
+		rl := New(100, WithoutSlack(), WithClock(cl), Per(time.Second)).
+			AddGroup(firstGroup, 10, Per(time.Second))
+
+		rl.Take(ctx, firstGroup)
+
+		now := time.Now()
+		if d := rl.Take(ctx, firstGroup).Sub(now); time.Second/100 != d.Round(5*time.Microsecond) {
+			t.Fatalf("must be equal to master rate='%s'", d)
+		}
+	})
+}
+
+type clockMock struct {
+	clock.Clock
+	counter    *int
+	cancelFunc context.CancelFunc
+}
+
+func (c clockMock) Sleep(duration time.Duration) {
+	c.Clock.Sleep(duration)
+
+	*c.counter++
+	if *c.counter > 1 {
+		c.cancelFunc()
+	}
+}
+
+func ptfOfInt(i int) *int { return &i }
