@@ -16,6 +16,7 @@ import (
 type GroupLimiter interface {
 	Take(context context.Context, groupName string) time.Time
 	AddGroup(groupName string, rate int, opts ...ratelimit.Option) GroupLimiter
+	SetGroup(groupName string, limiter ratelimit.Limiter)
 }
 
 // groupLimiter описание условий:
@@ -58,6 +59,10 @@ func (gr *groupLimiter) AddGroup(groupName string, rate int, opts ...ratelimit.O
 	gr.groupLimiters[groupName] = ratelimit.New(rate, opts...)
 
 	return gr
+}
+
+func (gr *groupLimiter) SetGroup(groupName string, rl ratelimit.Limiter) {
+	gr.groupLimiters[groupName] = rl
 }
 
 // WithClock - allow set custom clock objects
