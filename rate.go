@@ -16,7 +16,12 @@ import (
 type GroupLimiter interface {
 	Take(context context.Context, groupName string) time.Time
 	AddGroup(groupName string, rate int, opts ...ratelimit.Option) GroupLimiter
-	SetGroup(groupName string, limiter ratelimit.Limiter)
+	SetGroup(groupName string, limiter Limiter)
+}
+
+// Limiter - copy of uber Limiter interface
+type Limiter interface {
+	Take() time.Time
 }
 
 // groupLimiter описание условий:
@@ -25,8 +30,8 @@ type GroupLimiter interface {
 // 3. группа должна уметь использовать часть лимитов общих, с возможностью приоритезации
 // 4. TODO рассмотреть возможность автонаращивание лимитов группами при неиспользовании их одной из групп
 type groupLimiter struct {
-	masterLimit   ratelimit.Limiter
-	groupLimiters map[string]ratelimit.Limiter
+	masterLimit   Limiter
+	groupLimiters map[string]Limiter
 }
 
 func (gr *groupLimiter) Take(ctx context.Context, group string) time.Time {
@@ -51,7 +56,7 @@ func (gr *groupLimiter) Take(ctx context.Context, group string) time.Time {
 }
 
 func New(rate int, opts ...ratelimit.Option) GroupLimiter {
-	return &groupLimiter{masterLimit: ratelimit.New(rate, opts...), groupLimiters: make(map[string]ratelimit.Limiter, 1)}
+	return &groupLimiter{masterLimit: ratelimit.New(rate, opts...), groupLimiters: make(map[string]Limiter, 1)}
 }
 
 // AddGroup - add group to groupLimiter, method is not safe for concurrent use by multiple goroutines
@@ -61,7 +66,7 @@ func (gr *groupLimiter) AddGroup(groupName string, rate int, opts ...ratelimit.O
 	return gr
 }
 
-func (gr *groupLimiter) SetGroup(groupName string, rl ratelimit.Limiter) {
+func (gr *groupLimiter) SetGroup(groupName string, rl Limiter) {
 	gr.groupLimiters[groupName] = rl
 }
 
